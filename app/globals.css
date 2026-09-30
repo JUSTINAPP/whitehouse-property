@@ -1,0 +1,70 @@
+@import "tailwindcss";
+
+:root {
+  --background: #faf9f7;
+  --foreground: #1c1a17;
+
+  --color-navy: #0f1923;
+  --color-navy-light: #182633;
+  --color-cream: #faf9f7;
+  --color-cream-dim: #f2efe9;
+  --color-gold: #c9a84c;
+  --color-gold-light: #ddc478;
+
+  --color-beach-road: #d9622b;
+  --color-beach-road-light: #f7e2d3;
+  --color-barrys: #a9825a;
+  --color-barrys-light: #ede2d3;
+  --color-tilbury: #2f5d50;
+  --color-tilbury-light: #dce8e4;
+  --color-vicar: #6b2737;
+  --color-vicar-light: #ecdadf;
+
+  --color-ink: #1c1a17;
+  --color-ink-soft: #6b6459;
+  --color-border: #e7e2d9;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-navy: var(--color-navy);
+  --color-navy-light: var(--color-navy-light);
+  --color-cream: var(--color-cream);
+  --color-cream-dim: var(--color-cream-dim);
+  --color-gold: var(--color-gold);
+  --color-gold-light: var(--color-gold-light);
+  --color-beach-road: var(--color-beach-road);
+  --color-beach-road-light: var(--color-beach-road-light);
+  --color-barrys: var(--color-barrys);
+  --color-barrys-light: var(--color-barrys-light);
+  --color-tilbury: var(--color-tilbury);
+  --color-tilbury-light: var(--color-tilbury-light);
+  --color-vicar: var(--color-vicar);
+  --color-vicar-light: var(--color-vicar-light);
+  --color-ink: var(--color-ink);
+  --color-ink-soft: var(--color-ink-soft);
+  --color-border: var(--color-border);
+  --font-sans: var(--font-dm-sans);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-dm-sans), Arial, Helvetica, sans-serif;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #d8d2c5;
+  border-radius: 8px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #c9a84c;
+}

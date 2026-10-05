@@ -42,6 +42,27 @@ Open [http://localhost:3000](http://localhost:3000).
   are genuinely live calls to the Anthropic API, grounded in the data
   above — not pre-written text.
 
+## Print menus
+
+`/social/menu/print` edits each venue's **printed** menus and downloads
+print-ready PDFs. Venues print very different things (different sizes,
+page counts, artwork), so print menus are set up **one venue at a time**:
+
+- `lib/menu-print/pieces.ts` lists each venue's printed pieces and their
+  real production geometry (read off the venue's print PDFs).
+- `lib/menu-print/seeds/<venue>.ts` holds each piece's starting content.
+  Until a piece is saved, the editor shows this; Save writes it to the
+  `menu_print_docs` table (`supabase/migrations/004_menu_print_docs.sql`).
+- Page artwork lives in `public/assets/menu-print/<venue>/<piece>/`.
+- The live preview is the real PDF, built by `app/api/menu-print/pdf`.
+  Text is drawn as outlined vector paths from the Brown Pro fonts in
+  `assets/fonts/brown-pro` (placeholder typeface for now) -- no font is
+  embedded in the PDF.
+
+The Tilbury (Dining Room, Bar booklet, Shared Set Menu, Dessert) is set
+up. The other venues show a "not set up yet" note until their menus are
+added.
+
 ## Logins
 
 Two logins are expected: `jonas@dorja.com` and `scott@whpgroup.com.au`.

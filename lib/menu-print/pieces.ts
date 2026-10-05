@@ -1,5 +1,6 @@
 import type { VenueSlug } from "@/lib/types";
 import type { PieceDef, PrintPieceDoc } from "./types";
+import { BEACH_ROAD_SEEDS } from "./seeds/beach-road";
 import { TILBURY_SEEDS } from "./seeds/tilbury";
 
 // Which printed pieces each venue has, and the real production geometry of
@@ -34,14 +35,37 @@ const TILBURY_BAR: PieceDef = {
   format: { mediaW: 462.945, mediaH: 637.276, trim: { x0: 21, y0: 21, x1: 441.945, y1: 616.276 }, margin: 24, baseSize: 6.6, separator: "" },
 };
 
+const BEACH_ROAD_MAIN: PieceDef = {
+  key: "main",
+  label: "Food + Drinks menu",
+  description: "A3 · 2 pages (food, drinks + daily specials)",
+  format: {
+    mediaW: 1232.55,
+    mediaH: 883.89,
+    trim: { x0: 21, y0: 21, x1: 1211.55, y1: 862.89 },
+    margin: 24,
+    baseSize: 9.3,
+    separator: "",
+    descriptionBelow: true,
+    titleScale: 2.55,
+    titleRule: true,
+    lineScale: 1.82,
+    dietaryScale: 0.7,
+    inkColor: "#BF5743",
+    titleColor: "#BF5743",
+  },
+};
+
 export const VENUE_PIECES: Partial<Record<VenueSlug, PieceDef[]>> = {
   tilbury: [TILBURY_DINING, TILBURY_BAR, TILBURY_SET, TILBURY_DESSERT],
+  "beach-road": [BEACH_ROAD_MAIN],
 };
 
 // The starting content for each piece, used until a venue saves its own
 // version to the database.
 export const PIECE_SEEDS: Partial<Record<VenueSlug, Record<string, PrintPieceDoc>>> = {
   tilbury: TILBURY_SEEDS,
+  "beach-road": BEACH_ROAD_SEEDS,
 };
 
 export function getPieceDef(venue: VenueSlug, pieceKey: string): PieceDef | undefined {

@@ -17,6 +17,7 @@ export interface PrintItem {
   dietary: string[];
   // Optional trailing line printed under this item (e.g. "Add prawns +10").
   note?: string;
+  nameExtra?: string; // light text on the name line after the dietary tags (e.g. "add cheese +4")
 }
 
 export interface PrintSection {
@@ -24,8 +25,15 @@ export interface PrintSection {
   title: string;
   subtitle?: string; // a short intro sentence under the title
   note?: string; // trailing line after the items; ALL CAPS notes print as a centred call-out
-  priceColumns?: string[]; // column headings for multi-price items (e.g. ["150ml","250ml","BTL"])
+  priceColumns?: string[]; // column headings for multi-price items (e.g. ["150ml","250ml","BTL"]); "" = a column with no heading
+  priceColumnWidth?: number; // points between price columns (default scales with text size)
+  titleExtra?: string; // small light text on the title line after the title (e.g. "all served with fries")
+  titleSize?: number; // multiple of the default section title size
+  titleSpread?: boolean; // stretch the title letter-spacing to span the full column width
+  noRule?: boolean; // skip the dotted rule under this title (only for pieces that draw rules)
+  ruleWidth?: number; // shorten the dotted rule to this many points (e.g. to stop short of an illustration)
   items: PrintItem[];
+  column?: number; // which PrintPage.columns entry this section sits in (default 0)
 }
 
 export interface PrintPageBackground {
@@ -47,7 +55,28 @@ export interface PrintPage {
   footer?: string; // small print at the foot of the page ("\n"-separated lines)
   footerAlign?: "left" | "center";
   spacing?: number; // multiplier on the gaps between items and sections (default 1) -- airy menus use 2-3
+  // Pages laid out in several columns (e.g. an A3 spread). Each column has
+  // its own x-range in media points; sections choose a column with
+  // PrintSection.column (0-based, default 0). Omit for a normal one-column page.
+  columns?: PrintColumn[];
   sections: PrintSection[];
+}
+
+export interface PrintColumn {
+  x0: number; // media coordinates, points from the left edge
+  x1: number;
+  align?: "left" | "center";
+  titleInset?: number; // points down from the trim top to the column title baseline (default topInset)
+  spacing?: number; // spacing multiplier for this column (overrides the page's)
+  topInset?: number; // points down from the trim top where this column's content (or title) starts
+  title?: string; // optional big heading at the top of the column ("\n"-separated)
+  titleSize?: number; // pt, default scales from the text size
+  titleRule?: boolean; // dotted rule under the column title
+  sectionTitleScale?: number; // centred columns: section title size as a multiple of the text size
+  inkColor?: string; // override text colour for this column (e.g. cream on a coloured panel)
+  titleColor?: string;
+  footer?: string; // small print pinned to the foot of the column
+  footerInset?: number; // points up from the trim bottom to the last footer baseline
 }
 
 export interface PrintPieceDoc {
@@ -65,6 +94,11 @@ export interface PieceFormat {
   baseSize: number; // item/description text size; everything else scales from it
   // How a description follows the item name: "|" (South Beach style) or "" (just a space).
   separator: "|" | "";
+  descriptionBelow?: boolean; // description prints on its own line(s) under the item name instead of running on after it
+  lineScale?: number; // line height as a multiple of baseSize (default 1.32)
+  dietaryScale?: number; // dietary tag size as a multiple of baseSize (default 0.84)
+  titleScale?: number; // section title size as a multiple of baseSize (default 1.95)
+  titleRule?: boolean; // dotted rule under every section title
   inkColor?: string; // body text colour, hex (default near-black)
   titleColor?: string; // section heading colour, hex (default = inkColor)
 }

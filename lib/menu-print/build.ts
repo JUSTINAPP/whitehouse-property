@@ -3,7 +3,7 @@ import path from "path";
 import { PDFDocument, PDFImage, PDFPage, rgb } from "pdf-lib";
 import { loadBrownProFonts } from "./fonts";
 import { buildFormattedRuns, drawOutlinedText, drawRichTextLine, measureTextWidth, TextRun, wrapRichText, wrapText } from "./pdf-text";
-import type { PieceDef, PrintItem, PrintPage, PrintPieceDoc, PrintSection } from "./types";
+import type { PieceDef, PrintColumn, PrintItem, PrintPage, PrintPieceDoc, PrintSection } from "./types";
 
 // Builds a print-ready PDF for one menu piece: one PDF page per PrintPage,
 // at the piece's real media size, with the page artwork laid underneath and
@@ -65,6 +65,8 @@ interface Scale {
   titleInk: ReturnType<typeof rgb>;
   b: number; // base text size
   title: number;
+  colW: number; // default price-column pitch
+  spacing: number;
   diet: number;
   line: number;
   itemGap: number;
@@ -78,9 +80,11 @@ function scaleFor(def: PieceDef, spacing = 1): Scale {
     ink,
     titleInk: def.format.titleColor ? hexToRgb(def.format.titleColor) : ink,
     b: base,
-    title: base * 1.95,
-    diet: base * 0.84,
-    line: base * 1.32,
+    title: base * (def.format.titleScale ?? 1.95),
+    colW: base * 4.6,
+    spacing,
+    diet: base * (def.format.dietaryScale ?? 0.84),
+    line: base * (def.format.lineScale ?? 1.32),
     itemGap: base * 0.5 * spacing,
     sectionGap: base * 1.45 * Math.max(1, spacing * 0.8),
   };
@@ -106,23 +110,45 @@ function drawItem(
   const { b } = sc;
   const sep = def.format.separator;
   const cols = section.priceColumns;
-  const colW = b * 4.6;
+  const colW = section.priceColumnWidth ?? sc.colW;
 
   // Width reserved on the right for the price so the text wraps short of it.
   let gutter = 0;
   if (cols && cols.length) gutter = cols.length * colW + 6;
   else if (item.price) gutter = Math.max(30, measureTextWidth(fonts.regular, item.price, b) + 14);
 
-  const runs: TextRun[] = [{ text: item.name, font: fonts.regular, size: b, color: sc.ink }];
-  if (item.description) runs.push(...buildFormattedRuns(sep ? `${sep} ${item.description}` : item.description, fonts.light, fonts.regular, b, sc.ink));
+  const below = !!def.format.descriptionBelow;
+  const runs: TextRun[] = [];
+  if (item.name) runs.push({ text: item.name, font: fonts.regular, size: b, color: sc.ink });
   if (item.dietary.length > 0) runs.push({ text: `(${item.dietary.join(", ")})`, font: fonts.light, size: sc.diet, color: sc.ink });
+  if (item.nameExtra) runs.push(...buildFormattedRuns(item.nameExtra, fonts.light, fonts.regular, b, sc.ink));
+  const descRuns: TextRun[] = [];
+  if (item.description) descRuns.push(...buildFormattedRuns(!below && sep ? `${sep} ${item.description}` : item.description, fonts.light, fonts.regular, b, sc.ink));
+  if (!below) {
+    // Inline: description runs on after the name, dietary tags trail it.
+    const dietIdx = runs.findIndex((r) => r.size === sc.diet && r.font === fonts.light);
+    if (dietIdx >= 0) {
+      const [d] = runs.splice(dietIdx, 1);
+      runs.push(...descRuns, d);
+    } else runs.push(...descRuns);
+  }
 
-  const lines = wrapRichText(runs, x1 - x0 - gutter);
-  lines.forEach((line, i) => {
-    drawRichTextLine(page, line, x0, cur.y);
-    if (i === 0 && item.price) drawPrice(page, fonts, section, item.price, x1, cur.y, b, colW, sc.ink);
+  const width = x1 - x0 - gutter;
+  let first = true;
+  const emit = (lines: ReturnType<typeof wrapRichText>) => {
+    for (const line of lines) {
+      drawRichTextLine(page, line, x0, cur.y);
+      if (first && item.price) drawPrice(page, fonts, section, item.price, x1, cur.y, b, colW, sc.ink);
+      first = false;
+      cur.y -= sc.line;
+    }
+  };
+  if (runs.length) emit(wrapRichText(runs, width));
+  if (below && descRuns.length) emit(wrapRichText(descRuns, width));
+  if (first && item.price) {
+    drawPrice(page, fonts, section, item.price, x1, cur.y, b, colW, sc.ink);
     cur.y -= sc.line;
-  });
+  }
 
   if (item.note) {
     const noteRuns = buildFormattedRuns(item.note, fonts.light, fonts.regular, b, sc.ink);
@@ -151,7 +177,23 @@ function drawPrice(page: PDFPage, fonts: Fonts, section: PrintSection, price: st
   });
 }
 
-function drawCenteredItem(page: PDFPage, fonts: Fonts, sc: Scale, item: PrintItem, cx: number, maxWidth: number, cur: Cursor) {
+function drawCenteredItem(page: PDFPage, fonts: Fonts, def: PieceDef, sc: Scale, item: PrintItem, cx: number, maxWidth: number, cur: Cursor) {
+  if (def.format.descriptionBelow) {
+    if (item.name) {
+      for (const line of wrapRichText([{ text: item.name, font: fonts.regular, size: sc.b, color: sc.ink }], maxWidth)) {
+        drawRichTextLine(page, line, cx - lineWidth(line) / 2, cur.y);
+        cur.y -= sc.line;
+      }
+    }
+    if (item.description) {
+      for (const line of wrapRichText(buildFormattedRuns(item.description, fonts.light, fonts.regular, sc.b, sc.ink), maxWidth)) {
+        drawRichTextLine(page, line, cx - lineWidth(line) / 2, cur.y);
+        cur.y -= sc.line;
+      }
+    }
+    cur.y -= sc.itemGap * 0.5;
+    return;
+  }
   const runs: TextRun[] = [{ text: item.name, font: fonts.light, size: sc.b, color: sc.ink }];
   if (item.description) runs.push(...buildFormattedRuns(item.description, fonts.light, fonts.regular, sc.b, sc.ink));
   for (const line of wrapRichText(runs, maxWidth)) {
@@ -163,36 +205,65 @@ function drawCenteredItem(page: PDFPage, fonts: Fonts, sc: Scale, item: PrintIte
 
 // ------------------------------------------------------------- sections
 
-function drawSection(page: PDFPage, fonts: Fonts, def: PieceDef, sc: Scale, section: PrintSection, x0: number, x1: number, cur: Cursor, center: boolean) {
+function drawDottedRule(page: PDFPage, x0: number, x1: number, y: number, size: number, color: ReturnType<typeof rgb>) {
+  page.drawLine({ start: { x: x0, y }, end: { x: x1, y }, thickness: Math.max(0.5, size * 0.03), color, dashArray: [Math.max(0.8, size * 0.04), Math.max(1.8, size * 0.09)], lineCap: 1 });
+}
+
+function subtitleLines(fonts: Fonts, text: string, size: number, width: number): string[] {
+  const out: string[] = [];
+  for (const raw of text.split("\n")) {
+    if (!raw.trim()) out.push("");
+    else out.push(...wrapText(fonts.light, raw, size, width));
+  }
+  return out;
+}
+
+function drawSection(page: PDFPage, fonts: Fonts, def: PieceDef, sc: Scale, section: PrintSection, x0: number, x1: number, cur: Cursor, center: boolean, centerTitleScale = 1.35) {
   const cx = (x0 + x1) / 2;
   const width = x1 - x0;
 
   if (center) {
-    drawOutlinedText(page, fonts.regular, section.title, { x: cx, y: cur.y, size: sc.b * 1.35, color: sc.titleInk, align: "center" });
-    cur.y -= sc.line * 1.35;
+    const size = sc.b * centerTitleScale * (section.titleSize ?? 1);
+    drawOutlinedText(page, fonts.light, section.title, { x: cx, y: cur.y, size, color: sc.titleInk, align: "center" });
+    cur.y -= def.format.descriptionBelow ? size * 0.75 : Math.max(sc.line * 1.35, size * 0.95);
     if (section.subtitle) {
-      for (const l of wrapText(fonts.light, section.subtitle, sc.b, width)) {
-        drawOutlinedText(page, fonts.light, l, { x: cx, y: cur.y, size: sc.b, color: sc.ink, align: "center" });
+      for (const l of subtitleLines(fonts, section.subtitle, sc.b, width)) {
+        if (l) drawOutlinedText(page, fonts.light, l, { x: cx, y: cur.y, size: sc.b, color: sc.ink, align: "center" });
         cur.y -= sc.line;
       }
     }
-    for (const item of section.items) drawCenteredItem(page, fonts, sc, item, cx, width, cur);
-    cur.y -= sc.sectionGap * 1.1;
+    for (const item of section.items) drawCenteredItem(page, fonts, def, sc, item, cx, width, cur);
+    cur.y -= def.format.descriptionBelow ? sc.b * 1.6 * Math.max(sc.spacing, 0.1) * 2.2 : sc.sectionGap * 1.1;
     return;
   }
 
-  drawOutlinedText(page, fonts.light, section.title, { x: x0, y: cur.y, size: sc.title, color: sc.titleInk });
-  cur.y -= sc.title * 0.3 + sc.b * 1.25;
+  const tSize = sc.title * (section.titleSize ?? 1);
+  let spread = 0;
+  if (section.titleSpread && section.title.length > 1) {
+    spread = Math.max(0, (width - measureTextWidth(fonts.light, section.title, tSize)) / (section.title.length - 1));
+  }
+  drawOutlinedText(page, fonts.light, section.title, { x: x0, y: cur.y, size: tSize, color: sc.titleInk, letterSpacing: spread });
+  if (section.titleExtra) {
+    const tx = x0 + measureTextWidth(fonts.light, section.title, tSize) + sc.b * 0.9;
+    drawOutlinedText(page, fonts.light, section.titleExtra, { x: tx, y: cur.y, size: sc.b, color: sc.ink });
+  }
+  if (def.format.titleRule && !section.noRule) {
+    const ry = cur.y - tSize * 0.5;
+    drawDottedRule(page, x0, section.ruleWidth ? x0 + section.ruleWidth : x1, ry, tSize, sc.titleInk);
+    cur.y = ry - sc.b * 1.7;
+  } else if (def.format.titleRule) {
+    cur.y -= sc.b * 1.9;
+  } else cur.y -= tSize * 0.3 + sc.b * 1.25;
 
   if (section.subtitle) {
-    for (const l of wrapText(fonts.light, section.subtitle, sc.b, width)) {
-      drawOutlinedText(page, fonts.light, l, { x: x0, y: cur.y, size: sc.b, color: sc.ink });
+    for (const l of subtitleLines(fonts, section.subtitle, sc.b, width)) {
+      if (l) drawOutlinedText(page, fonts.light, l, { x: x0, y: cur.y, size: sc.b, color: sc.ink });
       cur.y -= sc.line;
     }
   }
 
-  if (section.priceColumns && section.priceColumns.length) {
-    const colW = sc.b * 4.6;
+  if (section.priceColumns && section.priceColumns.some((l) => l)) {
+    const colW = section.priceColumnWidth ?? sc.colW;
     const n = section.priceColumns.length;
     section.priceColumns.forEach((label, i) => {
       drawOutlinedText(page, fonts.light, label, { x: x1 - (n - 1 - i) * colW, y: cur.y + sc.line * 0.15, size: sc.b * 0.8, color: sc.ink, align: "right" });
@@ -234,6 +305,57 @@ function drawFooter(page: PDFPage, fonts: Fonts, def: PieceDef, sc: Scale, p: Pr
     y -= lh;
   }
   return bottom + lines.length * lh;
+}
+
+function drawColumnsPage(page: PDFPage, fonts: Fonts, def: PieceDef, p: PrintPage, warnings: string[]) {
+  const { trim, margin } = def.format;
+  (p.columns ?? []).forEach((col: PrintColumn, ci: number) => {
+    const base = scaleFor(def, col.spacing ?? p.spacing ?? 1);
+    const sc: Scale = { ...base, ink: col.inkColor ? hexToRgb(col.inkColor) : base.ink, titleInk: col.titleColor ? hexToRgb(col.titleColor) : col.inkColor ? hexToRgb(col.inkColor) : base.titleInk };
+    const center = col.align === "center";
+    const width = col.x1 - col.x0;
+    const cx = (col.x0 + col.x1) / 2;
+    const topInset = col.topInset ?? margin + sc.title * 0.75;
+    const cur: Cursor = { y: trim.y1 - topInset };
+
+    if (col.title) {
+      let size = col.titleSize ?? sc.title * 1.25;
+      const lines = col.title.split("\n");
+      const widest = Math.max(...lines.map((l) => measureTextWidth(fonts.light, l, size)));
+      if (widest > width) size *= width / widest;
+      let y = trim.y1 - (col.titleInset ?? topInset);
+      for (const l of lines) {
+        drawOutlinedText(page, fonts.light, l, center ? { x: cx, y, size, color: sc.titleInk, align: "center" } : { x: col.x0, y, size, color: sc.titleInk });
+        y -= size * 1.15;
+      }
+      if (col.titleRule) {
+        const ry = y + size * 1.15 - size * 1.1;
+        drawDottedRule(page, col.x0, col.x1, ry, size * 0.8, sc.titleInk);
+      }
+    }
+
+    let footerTop = trim.y0 + margin;
+    if (col.footer) {
+      const size = Math.max(5, sc.b * 0.72);
+      const lh = size * 1.4;
+      const lines: string[] = [];
+      for (const raw of col.footer.split("\n")) lines.push(...wrapText(fonts.light, raw, size, width));
+      const bottom = trim.y0 + (col.footerInset ?? margin * 0.8);
+      let y = bottom + (lines.length - 1) * lh;
+      for (const l of lines) {
+        drawOutlinedText(page, fonts.light, l, center ? { x: cx, y, size, color: sc.ink, align: "center" } : { x: col.x0, y, size, color: sc.ink });
+        y -= lh;
+      }
+      footerTop = bottom + lines.length * lh;
+    }
+
+    for (const section of p.sections) {
+      if ((section.column ?? 0) !== ci) continue;
+      drawSection(page, fonts, def, sc, section, col.x0, col.x1, cur, center, col.sectionTitleScale ?? 1.35);
+    }
+    const lastBaseline = cur.y + sc.sectionGap;
+    if (lastBaseline < footerTop) warnings.push(`"${p.label}" column ${ci + 1}: the content runs into the bottom of the page (${Math.ceil(footerTop - lastBaseline)}pt too long) — shorten it or reduce items.`);
+  });
 }
 
 function drawContentPage(page: PDFPage, fonts: Fonts, def: PieceDef, p: PrintPage, warnings: string[]) {
@@ -298,7 +420,7 @@ export async function buildPiecePdf(doc: PrintPieceDoc, def: PieceDef): Promise<
         warnings.push(`"${p.label}": couldn't load its background artwork.`);
       }
     }
-    if (p.kind === "content") drawContentPage(page, fonts, def, p, warnings);
+    if (p.kind === "content") (p.columns && p.columns.length ? drawColumnsPage : drawContentPage)(page, fonts, def, p, warnings);
   }
 
   return { bytes: await pdfDoc.save(), warnings };

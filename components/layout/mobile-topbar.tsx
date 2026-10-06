@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutGrid, CalendarDays, Users, ClipboardList, Mail, Palette, UtensilsCrossed, FolderOpen, Printer } from "lucide-react";
+import { LayoutGrid, CalendarDays, Users, ClipboardList, Mail, Palette, UtensilsCrossed, FolderOpen } from "lucide-react";
 import { useVenue } from "@/context/venue-context";
 import { cn } from "@/lib/utils";
 
@@ -10,8 +10,7 @@ const NAV_ITEMS = [
   { href: "/", label: "Overview", icon: LayoutGrid },
   { href: "/social", label: "Social", icon: CalendarDays },
   { href: "/social/guidelines", label: "Guidelines", icon: Palette },
-  { href: "/social/menu", label: "Menu", icon: UtensilsCrossed },
-  { href: "/social/menu/print", label: "Print menus", icon: Printer },
+  { href: "/menu", label: "Menu", icon: UtensilsCrossed },
   { href: "/social/content", label: "Content", icon: FolderOpen },
   { href: "/guests", label: "Guests", icon: Users },
   { href: "/reservations", label: "Reservations", icon: ClipboardList },
